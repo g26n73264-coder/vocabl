@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vocabulary Master - Native TTS Edition</title>
     
-    <!-- ★ PWA & iOS対応メタタグ -->
+    <!-- PWA & iOS対応メタタグ -->
     <link rel="manifest" id="manifest-placeholder">
     <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -158,7 +158,6 @@
         }
         .choice-btn:hover { background: rgba(0,229,255,0.1); border-color: var(--accent); }
 
-        /* ⭕️/❌ カットイン演出 */
         #cutin-overlay {
             position: fixed;
             top: 50%;
@@ -171,7 +170,6 @@
             pointer-events: none;
         }
 
-        /* リザルト画面 */
         .result-panel { display: none; flex-direction: column; align-items: center; text-align: center; margin: auto; width: 100%; }
         .result-score { font-size: 3rem; font-weight: 800; color: var(--accent); margin: 15px 0; }
         .remediation-box { width: 100%; max-height: 250px; overflow-y: auto; text-align: left; margin: 15px 0; }
@@ -180,7 +178,6 @@
 </head>
 <body>
 
-    <!-- ⭕️/❌ Cut-in -->
     <div id="cutin-overlay">⭕️</div>
 
     <div class="container">
@@ -189,7 +186,7 @@
             <h1 style="font-size: 32px; margin-bottom: 10px;">VOCABULARY MASTER</h1>
             <p style="color: var(--text-sub); margin-bottom: 30px;">CSVファイルを読み込んで学習を開始します</p>
             <input type="file" id="csv-file" accept=".csv" style="display: none;">
-            <button class="action-btn" onclick="document.getElementById('csv-file').click()">📁 CSVファイルを読み込む</button>
+            <button class="action-btn" onclick="document.getElementById('csv-file').click();">📁 CSVファイルを読み込む</button>
         </div>
 
         <!-- 2. アプリメイン画面 -->
@@ -223,7 +220,7 @@
                         <div class="big-word" id="detail-word">選択してください</div>
                         <div class="phonetic" id="detail-phonetic">-</div>
                         <div class="meaning" id="detail-meaning">リストから単語を選択してください</div>
-                        <button class="action-btn" id="btn-play-audio" disabled>🔊 ネイティブ高音質発音を聞く</button>
+                        <button class="action-btn" id="btn-play-audio" disabled>🔊 ネイティブ発音を聞く</button>
                     </div>
                 </div>
             </div>
@@ -301,7 +298,7 @@
     </div>
 
     <script>
-        // ★ PWA manifest 動的作成
+        // PWA manifest 動的作成
         const manifestData = {
             "name": "Vocabulary Master",
             "short_name": "VocabMaster",
@@ -320,7 +317,7 @@
         const manifestBlob = new Blob([JSON.stringify(manifestData)], { type: 'application/json' });
         document.getElementById('manifest-placeholder').setAttribute('href', URL.createObjectURL(manifestBlob));
 
-        // ★ Service Worker 登録（オフライン動作対応）
+        // Service Worker 登録
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js').catch(err => {
@@ -333,22 +330,40 @@
         let currentLangWords = [];
         let mistakes = [];
         let currentLang = "英語";
-        
-        const globalAudio = new Audio();
+
+        // --- 強力なハイブリッド音声再生エンジン ---
+        const audioPlayer = new Audio();
 
         function speakWord(word) {
             if (!word) return;
-            const langCode = (currentLang === "ドイツ語") ? "de" : "en";
-            const encodedWord = encodeURIComponent(word.trim());
-            const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedWord}&tl=${langCode}&client=tw-ob`;
+            const cleanWord = word.trim();
+            const isGerman = (currentLang === "ドイツ語");
 
-            globalAudio.pause();
-            globalAudio.src = audioUrl;
-            globalAudio.play().catch(err => {
-                console.warn("Audio play prevented or error:", err);
-            });
+            // 1. 英語の場合はCORSブロックを受けない大手の高音質辞書音声ストリームを最優先利用
+            if (!isGerman) {
+                const audioUrl = `https://dict.youdao.com/dictvoice?type=0&audio=${encodeURIComponent(cleanWord)}`;
+                audioPlayer.pause();
+                audioPlayer.src = audioUrl;
+                audioPlayer.play().catch(() => {
+                    // フォールバック: Web Speech API
+                    speakFallback(cleanWord, "en-US");
+                });
+            } else {
+                // ドイツ語などのフォールバック
+                speakFallback(cleanWord, "de-DE");
+            }
         }
 
+        function speakFallback(text, lang) {
+            if (!('speechSynthesis' in window)) return;
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = lang;
+            u.rate = 0.9;
+            window.speechSynthesis.speak(u);
+        }
+
+        // CSV読み込み
         document.getElementById('csv-file').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -372,6 +387,7 @@
             });
         });
 
+        // タブ切り替え
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -381,6 +397,7 @@
             });
         });
 
+        // 言語切替
         document.getElementById('lang-select').addEventListener('change', (e) => {
             currentLang = e.target.value;
             switchLanguage();
@@ -404,6 +421,7 @@
             document.getElementById('spell-level').innerHTML = html;
         }
 
+        // 辞書・検索
         document.getElementById('search-box').addEventListener('input', (e) => renderSearchList(e.target.value.toLowerCase()));
 
         function renderSearchList(query) {
@@ -468,7 +486,9 @@
 
         function shuffle(arr) { return arr.sort(() => Math.random() - 0.5); }
 
-        document.getElementById('btn-start-mc').addEventListener('click', () => startMCTest(false));
+        document.getElementById('btn-start-mc').addEventListener('click', () => {
+            startMCTest(false);
+        });
         document.getElementById('btn-review-mc').addEventListener('click', () => {
             document.querySelectorAll('.tab-btn')[1].click();
             startMCTest(true);
