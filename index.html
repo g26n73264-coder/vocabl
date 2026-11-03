@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vocabulary Master - Native TTS Edition</title>
+    
+    <!-- ★ PWA & iOS対応メタタグ -->
+    <link rel="manifest" id="manifest-placeholder">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="VocabMaster">
+
+    <!-- CSVパース用ライブラリ -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        :root {
+            --bg-grad: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --accent: #00e5ff;
+            --accent-hover: #00b8d4;
+            --danger: #ff4757;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+            background: var(--bg-grad);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 950px;
+            height: 85vh;
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        header {
+            padding: 20px 30px;
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        h1 {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--accent);
+            letter-spacing: 2px;
+        }
+
+        select, input[type="number"], input[type="text"] {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--glass-border);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            outline: none;
+            font-size: 14px;
+        }
+
+        .tabs { display: flex; background: rgba(0,0,0,0.2); }
+        .tab-btn {
+            flex: 1;
+            padding: 15px;
+            background: none;
+            border: none;
+            color: var(--text-sub);
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.3s;
+            border-bottom: 2px solid transparent;
+        }
+        .tab-btn:hover { color: white; background: rgba(255,255,255,0.05); }
+        .tab-btn.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
+
+        .tab-content { display: none; flex: 1; padding: 25px; overflow-y: auto; }
+        .tab-content.active { display: flex; flex-direction: column; }
+
+        button.action-btn {
+            background: var(--accent);
+            color: #0f172a;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button.action-btn:hover { background: var(--accent-hover); }
+        button.action-btn:disabled { background: #334155; color: #94a3b8; cursor: not-allowed; }
+
+        #upload-screen {
+            position: absolute;
+            inset: 0;
+            background: var(--bg-grad);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            text-align: center;
+        }
+
+        .split-layout { display: flex; gap: 20px; height: 100%; width: 100%; }
+        .left-panel { flex: 1; display: flex; flex-direction: column; gap: 15px; }
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: rgba(0,0,0,0.2);
+            border-radius: 16px;
+            padding: 20px;
+        }
+
+        .word-list { flex: 1; overflow-y: auto; border: 1px solid var(--glass-border); border-radius: 8px; }
+        .list-item { padding: 12px 15px; border-bottom: 1px solid var(--glass-border); cursor: pointer; }
+        .list-item:hover, .list-item.selected { background: rgba(0, 229, 255, 0.1); border-left: 4px solid var(--accent); }
+
+        .big-word { font-size: 3rem; font-weight: 800; margin-bottom: 10px; }
+        .phonetic { font-size: 1.2rem; color: var(--accent); font-style: italic; margin-bottom: 20px; }
+        .meaning { font-size: 1.4rem; color: var(--text-sub); margin-bottom: 30px; }
+
+        .test-setup { text-align: center; margin: auto; }
+        .test-play { display: none; flex-direction: column; height: 100%; text-align: center; }
+
+        .choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: auto; }
+        .choice-btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--glass-border);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            cursor: pointer;
+        }
+        .choice-btn:hover { background: rgba(0,229,255,0.1); border-color: var(--accent); }
+
+        /* ⭕️/❌ カットイン演出 */
+        #cutin-overlay {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 140px;
+            font-weight: bold;
+            z-index: 1000;
+            display: none;
+            pointer-events: none;
+        }
+
+        /* リザルト画面 */
+        .result-panel { display: none; flex-direction: column; align-items: center; text-align: center; margin: auto; width: 100%; }
+        .result-score { font-size: 3rem; font-weight: 800; color: var(--accent); margin: 15px 0; }
+        .remediation-box { width: 100%; max-height: 250px; overflow-y: auto; text-align: left; margin: 15px 0; }
+        .remediation-item { background: rgba(255,71,87,0.1); border-left: 4px solid var(--danger); padding: 10px 15px; margin-bottom: 8px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <!-- ⭕️/❌ Cut-in -->
+    <div id="cutin-overlay">⭕️</div>
+
+    <div class="container">
+        <!-- 1. CSV選択画面 -->
+        <div id="upload-screen">
+            <h1 style="font-size: 32px; margin-bottom: 10px;">VOCABULARY MASTER</h1>
+            <p style="color: var(--text-sub); margin-bottom: 30px;">CSVファイルを読み込んで学習を開始します</p>
+            <input type="file" id="csv-file" accept=".csv" style="display: none;">
+            <button class="action-btn" onclick="document.getElementById('csv-file').click()">📁 CSVファイルを読み込む</button>
+        </div>
+
+        <!-- 2. アプリメイン画面 -->
+        <div id="main-app" style="display: none; height: 100%; flex-direction: column;">
+            <header>
+                <h1>VOCABULARY MASTER</h1>
+                <div>
+                    <span style="margin-right: 8px; color: var(--text-sub);">言語:</span>
+                    <select id="lang-select">
+                        <option value="英語">🇬🇧 英語</option>
+                        <option value="ドイツ語">🇩🇪 ドイツ語</option>
+                    </select>
+                </div>
+            </header>
+
+            <div class="tabs">
+                <button class="tab-btn active" data-target="tab-search">🔍 辞書・検索</button>
+                <button class="tab-btn" data-target="tab-mc">📝 4択テスト</button>
+                <button class="tab-btn" data-target="tab-spell">⌨️ スペル</button>
+                <button class="tab-btn" data-target="tab-review">⚠️ 復習</button>
+            </div>
+
+            <!-- 辞書・検索 -->
+            <div id="tab-search" class="tab-content active">
+                <div class="split-layout">
+                    <div class="left-panel">
+                        <input type="text" id="search-box" placeholder="検索...">
+                        <div class="word-list" id="search-list"></div>
+                    </div>
+                    <div class="right-panel">
+                        <div class="big-word" id="detail-word">選択してください</div>
+                        <div class="phonetic" id="detail-phonetic">-</div>
+                        <div class="meaning" id="detail-meaning">リストから単語を選択してください</div>
+                        <button class="action-btn" id="btn-play-audio" disabled>🔊 ネイティブ高音質発音を聞く</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4択テスト -->
+            <div id="tab-mc" class="tab-content">
+                <div id="mc-setup" class="test-setup">
+                    <h2 style="color: var(--accent); margin-bottom: 20px;">4択テスト設定</h2>
+                    <div style="margin-bottom: 20px;">
+                        レベル: <select id="mc-level"></select>
+                        問題数: <input type="number" id="mc-count" value="10" min="1" max="100" style="width: 70px;">
+                    </div>
+                    <button class="action-btn" id="btn-start-mc">🚀 テスト開始</button>
+                </div>
+
+                <div id="mc-play" class="test-play">
+                    <div style="color: var(--text-sub);" id="mc-progress">1 / 10</div>
+                    <div class="big-word" id="mc-word">Word</div>
+                    <div class="phonetic" id="mc-phonetic">/phonetic/</div>
+                    <div class="choice-grid" id="mc-choices"></div>
+                </div>
+
+                <div id="mc-result" class="result-panel">
+                    <h2>テスト結果</h2>
+                    <div class="result-score" id="mc-score-text">0%</div>
+                    <div class="remediation-box" id="mc-remediation"></div>
+                    <button class="action-btn" onclick="resetTest('mc')">メニューに戻る</button>
+                </div>
+            </div>
+
+            <!-- スペルテスト -->
+            <div id="tab-spell" class="tab-content">
+                <div id="spell-setup" class="test-setup">
+                    <h2 style="color: var(--accent); margin-bottom: 20px;">スペルテスト設定</h2>
+                    <div style="margin-bottom: 20px;">
+                        レベル: <select id="spell-level"></select>
+                        問題数: <input type="number" id="spell-count" value="10" min="1" max="100" style="width: 70px;">
+                    </div>
+                    <button class="action-btn" id="btn-start-spell">🚀 テスト開始</button>
+                </div>
+
+                <div id="spell-play" class="test-play">
+                    <div style="color: var(--text-sub);" id="spell-progress">1 / 10</div>
+                    <div style="margin: 20px 0; color: var(--text-sub);">意味に対応するスペルを入力してください</div>
+                    <div class="meaning" id="spell-meaning" style="font-size: 2rem; color: white;">意味</div>
+                    <div>
+                        <input type="text" id="spell-input" placeholder="スペルを入力..." style="font-size: 1.3rem; text-align: center; width: 300px; margin-bottom: 15px;" autocomplete="off">
+                        <br>
+                        <button class="action-btn" id="btn-submit-spell">回答</button>
+                    </div>
+                </div>
+
+                <div id="spell-result" class="result-panel">
+                    <h2>テスト結果</h2>
+                    <div class="result-score" id="spell-score-text">0%</div>
+                    <div class="remediation-box" id="spell-remediation"></div>
+                    <button class="action-btn" onclick="resetTest('spell')">メニューに戻る</button>
+                </div>
+            </div>
+
+            <!-- 復習 -->
+            <div id="tab-review" class="tab-content">
+                <div class="split-layout">
+                    <div class="left-panel">
+                        <h3 style="color: var(--accent); margin-bottom: 10px;">⚠️ 間違えた単語一覧</h3>
+                        <div class="word-list" id="review-list"></div>
+                    </div>
+                    <div class="right-panel">
+                        <button class="action-btn" id="btn-review-mc" style="margin-bottom: 15px; width: 80%;">📝 このリストで4択テスト</button>
+                        <button class="action-btn" id="btn-clear-review" style="background: var(--danger); width: 80%;">🗑️ 復習リストをクリア</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ★ PWA manifest 動的作成
+        const manifestData = {
+            "name": "Vocabulary Master",
+            "short_name": "VocabMaster",
+            "start_url": "./",
+            "display": "standalone",
+            "background_color": "#0f172a",
+            "theme_color": "#0f172a",
+            "icons": [
+                {
+                    "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2300e5ff'/><text x='50%' y='65%' font-size='60' text-anchor='middle' fill='%230f172a' font-family='sans-serif' font-weight='bold'>V</text></svg>",
+                    "sizes": "192x192 512x512",
+                    "type": "image/svg+xml"
+                }
+            ]
+        };
+        const manifestBlob = new Blob([JSON.stringify(manifestData)], { type: 'application/json' });
+        document.getElementById('manifest-placeholder').setAttribute('href', URL.createObjectURL(manifestBlob));
+
+        // ★ Service Worker 登録（オフライン動作対応）
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(err => {
+                    console.log('SW registration skipped or failed:', err);
+                });
+            });
+        }
+
+        let allWords = [];
+        let currentLangWords = [];
+        let mistakes = [];
+        let currentLang = "英語";
+        
+        const globalAudio = new Audio();
+
+        function speakWord(word) {
+            if (!word) return;
+            const langCode = (currentLang === "ドイツ語") ? "de" : "en";
+            const encodedWord = encodeURIComponent(word.trim());
+            const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedWord}&tl=${langCode}&client=tw-ob`;
+
+            globalAudio.pause();
+            globalAudio.src = audioUrl;
+            globalAudio.play().catch(err => {
+                console.warn("Audio play prevented or error:", err);
+            });
+        }
+
+        document.getElementById('csv-file').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    allWords = results.data.map(row => ({
+                        言語: row['言語'] || '英語',
+                        レベル: row['レベル'] || '1',
+                        単語: row['単語'] || '',
+                        意味: row['意味'] || '',
+                        発音記号: row['発音記号'] || row['発音'] || ''
+                    })).filter(w => w.単語);
+
+                    document.getElementById('upload-screen').style.display = 'none';
+                    document.getElementById('main-app').style.display = 'flex';
+                    switchLanguage();
+                }
+            });
+        });
+
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById(btn.dataset.target).classList.add('active');
+            });
+        });
+
+        document.getElementById('lang-select').addEventListener('change', (e) => {
+            currentLang = e.target.value;
+            switchLanguage();
+        });
+
+        function switchLanguage() {
+            currentLangWords = allWords.filter(w => w.言語 === currentLang);
+            updateLevels();
+            renderSearchList('');
+            updateReviewList();
+            document.getElementById('detail-word').textContent = "選択してください";
+            document.getElementById('detail-phonetic').textContent = "-";
+            document.getElementById('detail-meaning').textContent = "リストから単語を選択してください";
+            document.getElementById('btn-play-audio').disabled = true;
+        }
+
+        function updateLevels() {
+            const levels = ["すべて", ...new Set(currentLangWords.map(w => w.レベル))];
+            const html = levels.map(l => `<option value="${l}">${l}</option>`).join('');
+            document.getElementById('mc-level').innerHTML = html;
+            document.getElementById('spell-level').innerHTML = html;
+        }
+
+        document.getElementById('search-box').addEventListener('input', (e) => renderSearchList(e.target.value.toLowerCase()));
+
+        function renderSearchList(query) {
+            const container = document.getElementById('search-list');
+            container.innerHTML = '';
+            currentLangWords.forEach(w => {
+                if (w.単語.toLowerCase().includes(query) || w.意味.includes(query)) {
+                    const div = document.createElement('div');
+                    div.className = 'list-item';
+                    div.textContent = `${w.単語} - ${w.意味}`;
+                    div.onclick = () => {
+                        document.querySelectorAll('#search-list .list-item').forEach(el => el.classList.remove('selected'));
+                        div.classList.add('selected');
+                        document.getElementById('detail-word').textContent = w.単語;
+                        document.getElementById('detail-phonetic').textContent = `[${w.発音記号 || 'なし'}]`;
+                        document.getElementById('detail-meaning').textContent = w.意味;
+                        document.getElementById('btn-play-audio').disabled = false;
+                        document.getElementById('btn-play-audio').onclick = () => speakWord(w.単語);
+                    };
+                    container.appendChild(div);
+                }
+            });
+        }
+
+        function triggerCutin(isCorrect, callback) {
+            const overlay = document.getElementById('cutin-overlay');
+            overlay.textContent = isCorrect ? "⭕️" : "❌";
+            overlay.style.color = isCorrect ? "#00e5ff" : "#ff4757";
+            overlay.style.display = "block";
+
+            setTimeout(() => {
+                overlay.style.display = "none";
+                callback();
+            }, 600);
+        }
+
+        function recordMistake(wordObj) {
+            if (!mistakes.find(m => m.単語 === wordObj.単語 && m.言語 === wordObj.言語)) {
+                mistakes.push(wordObj);
+                updateReviewList();
+            }
+        }
+
+        function updateReviewList() {
+            const container = document.getElementById('review-list');
+            container.innerHTML = '';
+            const list = mistakes.filter(m => m.言語 === currentLang);
+            list.forEach(w => {
+                const div = document.createElement('div');
+                div.className = 'list-item';
+                div.textContent = `${w.単語} [${w.発音記号 || 'なし'}] - ${w.意味}`;
+                container.appendChild(div);
+            });
+        }
+
+        document.getElementById('btn-clear-review').addEventListener('click', () => {
+            mistakes = mistakes.filter(m => m.言語 !== currentLang);
+            updateReviewList();
+        });
+
+        let testQuestions = [], currentIdx = 0, score = 0, currentMistakes = [];
+
+        function shuffle(arr) { return arr.sort(() => Math.random() - 0.5); }
+
+        document.getElementById('btn-start-mc').addEventListener('click', () => startMCTest(false));
+        document.getElementById('btn-review-mc').addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn')[1].click();
+            startMCTest(true);
+        });
+
+        function startMCTest(isReview) {
+            const pool = isReview ? mistakes.filter(m => m.言語 === currentLang) :
+                (document.getElementById('mc-level').value === "すべて" ? currentLangWords : currentLangWords.filter(w => w.レベル === document.getElementById('mc-level').value));
+
+            if (pool.length < 4) return alert("4択テストを作成するには単語が4つ以上必要です");
+
+            const count = isReview ? pool.length : Math.min(document.getElementById('mc-count').value, pool.length);
+            testQuestions = shuffle([...pool]).slice(0, count);
+            currentIdx = 0; score = 0; currentMistakes = [];
+
+            document.getElementById('mc-setup').style.display = 'none';
+            document.getElementById('mc-play').style.display = 'flex';
+            document.getElementById('mc-result').style.display = 'none';
+            nextMCQuestion(pool);
+        }
+
+        function nextMCQuestion(pool) {
+            if (currentIdx >= testQuestions.length) return showResults('mc');
+
+            const q = testQuestions[currentIdx];
+            document.getElementById('mc-progress').textContent = `${currentIdx + 1} / ${testQuestions.length}`;
+            document.getElementById('mc-word').textContent = q.単語;
+            document.getElementById('mc-phonetic').textContent = `[${q.発音記号 || 'なし'}]`;
+            speakWord(q.単語);
+
+            let options = [q.意味];
+            while (options.length < 4) {
+                const dummy = pool[Math.floor(Math.random() * pool.length)].意味;
+                if (!options.includes(dummy)) options.push(dummy);
+            }
+            options = shuffle(options);
+
+            const grid = document.getElementById('mc-choices');
+            grid.innerHTML = '';
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'choice-btn';
+                btn.textContent = opt;
+                btn.onclick = () => {
+                    const isCorrect = (opt === q.意味);
+                    if (isCorrect) score++;
+                    else {
+                        currentMistakes.push(q);
+                        recordMistake(q);
+                    }
+                    triggerCutin(isCorrect, () => {
+                        currentIdx++;
+                        nextMCQuestion(pool);
+                    });
+                };
+                grid.appendChild(btn);
+            });
+        }
+
+        document.getElementById('btn-start-spell').addEventListener('click', () => {
+            const pool = document.getElementById('spell-level').value === "すべて" ? currentLangWords : currentLangWords.filter(w => w.レベル === document.getElementById('spell-level').value);
+            if (pool.length === 0) return alert("単語がありません");
+
+            const count = Math.min(document.getElementById('spell-count').value, pool.length);
+            testQuestions = shuffle([...pool]).slice(0, count);
+            currentIdx = 0; score = 0; currentMistakes = [];
+
+            document.getElementById('spell-setup').style.display = 'none';
+            document.getElementById('spell-play').style.display = 'flex';
+            document.getElementById('spell-result').style.display = 'none';
+            nextSpellQuestion();
+        });
+
+        function nextSpellQuestion() {
+            if (currentIdx >= testQuestions.length) return showResults('spell');
+
+            const q = testQuestions[currentIdx];
+            document.getElementById('spell-progress').textContent = `${currentIdx + 1} / ${testQuestions.length}`;
+            document.getElementById('spell-meaning').textContent = q.意味;
+            const input = document.getElementById('spell-input');
+            input.value = '';
+            input.focus();
+        }
+
+        function checkSpell() {
+            const q = testQuestions[currentIdx];
+            const input = document.getElementById('spell-input').value.trim().toLowerCase();
+            const isCorrect = (input === q.単語.trim().toLowerCase());
+
+            if (isCorrect) {
+                score++;
+                speakWord(q.単語);
+            } else {
+                currentMistakes.push(q);
+                recordMistake(q);
+            }
+
+            triggerCutin(isCorrect, () => {
+                currentIdx++;
+                nextSpellQuestion();
+            });
+        }
+
+        document.getElementById('btn-submit-spell').addEventListener('click', checkSpell);
+        document.getElementById('spell-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') checkSpell(); });
+
+        function showResults(mode) {
+            document.getElementById(`${mode}-play`).style.display = 'none';
+            const resPanel = document.getElementById(`${mode}-result`);
+            resPanel.style.display = 'flex';
+
+            const pct = Math.round((score / testQuestions.length) * 100);
+            document.getElementById(`${mode}-score-text`).textContent = `${score} / ${testQuestions.length} (${pct}%)`;
+
+            const box = document.getElementById(`${mode}-remediation`);
+            box.innerHTML = '';
+            if (currentMistakes.length === 0) {
+                box.innerHTML = '<div style="color:var(--accent);">🎉 全問正解です！</div>';
+            } else {
+                currentMistakes.forEach(m => {
+                    box.innerHTML += `
+                        <div class="remediation-item">
+                            <strong>${m.単語}</strong> [${m.発音記号 || 'なし'}] - ${m.意味}
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        function resetTest(mode) {
+            document.getElementById(`${mode}-setup`).style.display = 'block';
+            document.getElementById(`${mode}-result`).style.display = 'none';
+        }
+    </script>
+</body>
+</html>
