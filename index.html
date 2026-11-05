@@ -2,10 +2,19 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vocabulary Master - Native TTS Edition</title>
-    <!-- CSVパース用ライブラリ -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vocabulary Master - Responsive PWA Edition</title>
+    
+    <!-- PWA & Mobile Meta Tags -->
+    <link rel="manifest" id="manifest-placeholder">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="VocabMaster">
+
+    <!-- CSV Parser Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    
     <style>
         :root {
             --bg-grad: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
@@ -18,27 +27,27 @@
             --text-sub: #94a3b8;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
         body {
-            font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background: var(--bg-grad);
             color: var(--text-main);
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 20px;
+            padding: 15px;
         }
 
         .container {
             width: 100%;
             max-width: 950px;
-            height: 85vh;
+            height: 88vh;
             background: var(--glass-bg);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border: 1px solid var(--glass-border);
-            border-radius: 24px;
+            border-radius: 20px;
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -47,58 +56,60 @@
         }
 
         header {
-            padding: 20px 30px;
+            padding: 15px 20px;
             border-bottom: 1px solid var(--glass-border);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         h1 {
-            font-size: 22px;
+            font-size: 18px;
             font-weight: 800;
             color: var(--accent);
-            letter-spacing: 2px;
+            letter-spacing: 1px;
         }
 
         select, input[type="number"], input[type="text"] {
             background: rgba(0, 0, 0, 0.4);
             border: 1px solid var(--glass-border);
             color: white;
-            padding: 10px 14px;
+            padding: 10px 12px;
             border-radius: 8px;
             outline: none;
             font-size: 14px;
         }
 
-        .tabs { display: flex; background: rgba(0,0,0,0.2); }
+        .tabs { display: flex; background: rgba(0,0,0,0.2); overflow-x: auto; }
         .tab-btn {
             flex: 1;
-            padding: 15px;
+            min-width: 75px;
+            padding: 12px 8px;
             background: none;
             border: none;
             color: var(--text-sub);
+            font-size: 13px;
             font-weight: 600;
             cursor: pointer;
             transition: 0.3s;
+            white-space: nowrap;
             border-bottom: 2px solid transparent;
         }
-        .tab-btn:hover { color: white; background: rgba(255,255,255,0.05); }
         .tab-btn.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
 
-        .tab-content { display: none; flex: 1; padding: 25px; overflow-y: auto; }
+        .tab-content { display: none; flex: 1; padding: 20px; overflow-y: auto; }
         .tab-content.active { display: flex; flex-direction: column; }
 
         button.action-btn {
             background: var(--accent);
             color: #0f172a;
             border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 15px;
             font-weight: 700;
             cursor: pointer;
             transition: 0.2s;
         }
-        button.action-btn:hover { background: var(--accent-hover); }
         button.action-btn:disabled { background: #334155; color: #94a3b8; cursor: not-allowed; }
 
         #upload-screen {
@@ -111,10 +122,11 @@
             align-items: center;
             z-index: 100;
             text-align: center;
+            padding: 20px;
         }
 
-        .split-layout { display: flex; gap: 20px; height: 100%; width: 100%; }
-        .left-panel { flex: 1; display: flex; flex-direction: column; gap: 15px; }
+        .split-layout { display: flex; gap: 15px; height: 100%; width: 100%; }
+        .left-panel { flex: 1; display: flex; flex-direction: column; gap: 10px; }
         .right-panel {
             flex: 1;
             display: flex;
@@ -124,76 +136,81 @@
             text-align: center;
             background: rgba(0,0,0,0.2);
             border-radius: 16px;
-            padding: 20px;
+            padding: 15px;
         }
 
-        .word-list { flex: 1; overflow-y: auto; border: 1px solid var(--glass-border); border-radius: 8px; }
-        .list-item { padding: 12px 15px; border-bottom: 1px solid var(--glass-border); cursor: pointer; }
-        .list-item:hover, .list-item.selected { background: rgba(0, 229, 255, 0.1); border-left: 4px solid var(--accent); }
+        .word-list { flex: 1; overflow-y: auto; border: 1px solid var(--glass-border); border-radius: 8px; min-height: 150px; }
+        .list-item { padding: 12px 15px; border-bottom: 1px solid var(--glass-border); cursor: pointer; font-size: 14px; }
+        .list-item.selected { background: rgba(0, 229, 255, 0.1); border-left: 4px solid var(--accent); }
 
-        .big-word { font-size: 3rem; font-weight: 800; margin-bottom: 10px; }
-        
-        /* 再発音可能な単語表示用のスタイル */
-        .big-word.clickable {
-            cursor: pointer;
-            user-select: none;
-            transition: transform 0.1s, color 0.2s;
-        }
-        .big-word.clickable:hover {
-            color: var(--accent);
-        }
-        .big-word.clickable:active {
-            transform: scale(0.96);
-        }
+        .big-word { font-size: 2.4rem; font-weight: 800; margin-bottom: 8px; word-break: break-word; }
+        .big-word.clickable { cursor: pointer; user-select: none; }
+        .big-word.clickable:active { transform: scale(0.96); }
 
-        .phonetic { font-size: 1.2rem; color: var(--accent); font-style: italic; margin-bottom: 20px; }
-        .meaning { font-size: 1.4rem; color: var(--text-sub); margin-bottom: 30px; }
+        .phonetic { font-size: 1.1rem; color: var(--accent); font-style: italic; margin-bottom: 15px; }
+        .meaning { font-size: 1.2rem; color: var(--text-sub); margin-bottom: 20px; }
 
-        .test-setup { text-align: center; margin: auto; }
-        .test-play { display: none; flex-direction: column; height: 100%; text-align: center; }
+        .test-setup { text-align: center; margin: auto; width: 100%; }
+        .test-play { display: none; flex-direction: column; height: 100%; text-align: center; justify-content: space-between; }
 
-        .choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: auto; }
+        .choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; margin-top: 15px; }
         .choice-btn {
             background: rgba(255,255,255,0.05);
             border: 1px solid var(--glass-border);
             color: white;
-            padding: 20px;
+            padding: 16px;
             border-radius: 12px;
-            font-size: 1.1rem;
+            font-size: 1rem;
             cursor: pointer;
         }
-        .choice-btn:hover { background: rgba(0,229,255,0.1); border-color: var(--accent); }
 
-        /* ⭕️/❌ カットイン演出 */
         #cutin-overlay {
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 140px;
+            font-size: 100px;
             font-weight: bold;
             z-index: 1000;
             display: none;
             pointer-events: none;
         }
 
-        /* リザルト画面 */
         .result-panel { display: none; flex-direction: column; align-items: center; text-align: center; margin: auto; width: 100%; }
-        .result-score { font-size: 3rem; font-weight: 800; color: var(--accent); margin: 15px 0; }
-        .remediation-box { width: 100%; max-height: 250px; overflow-y: auto; text-align: left; margin: 15px 0; }
-        .remediation-item { background: rgba(255,71,87,0.1); border-left: 4px solid var(--danger); padding: 10px 15px; margin-bottom: 8px; border-radius: 4px; }
+        .result-score { font-size: 2.5rem; font-weight: 800; color: var(--accent); margin: 10px 0; }
+        .remediation-box { width: 100%; max-height: 200px; overflow-y: auto; text-align: left; margin: 15px 0; }
+        .remediation-item { background: rgba(255,71,87,0.1); border-left: 4px solid var(--danger); padding: 10px; margin-bottom: 8px; border-radius: 4px; font-size: 14px; }
+
+        /* --- スマホ専用レスポンシブスタイリング --- */
+        @media (max-width: 768px) {
+            body { padding: 5px; }
+            .container { height: 96vh; border-radius: 14px; }
+            header { padding: 12px 15px; }
+            h1 { font-size: 16px; }
+            
+            .split-layout { flex-direction: column; overflow-y: auto; }
+            .left-panel { flex: 1; min-height: 220px; }
+            .right-panel { flex: none; min-height: 180px; padding: 15px; }
+            
+            .big-word { font-size: 1.8rem; }
+            .meaning { font-size: 1.1rem; margin-bottom: 15px; }
+            
+            .choice-grid { grid-template-columns: 1fr; gap: 8px; }
+            .choice-btn { padding: 14px; font-size: 0.95rem; }
+            
+            #spell-input { width: 100% !important; }
+        }
     </style>
 </head>
 <body>
 
-    <!-- ⭕️/❌ Cut-in -->
     <div id="cutin-overlay">⭕️</div>
 
     <div class="container">
         <!-- 1. CSV選択画面 -->
         <div id="upload-screen">
-            <h1 style="font-size: 32px; margin-bottom: 10px;">VOCABULARY MASTER</h1>
-            <p style="color: var(--text-sub); margin-bottom: 30px;">CSVファイルを読み込んで学習を開始します</p>
+            <h1 style="font-size: 26px; margin-bottom: 10px;">VOCABULARY MASTER</h1>
+            <p style="color: var(--text-sub); margin-bottom: 25px; font-size: 14px;">CSVファイルを読み込んで学習を開始します</p>
             <input type="file" id="csv-file" accept=".csv" style="display: none;">
             <button class="action-btn" onclick="document.getElementById('csv-file').click()">📁 CSVファイルを読み込む</button>
         </div>
@@ -201,9 +218,8 @@
         <!-- 2. アプリメイン画面 -->
         <div id="main-app" style="display: none; height: 100%; flex-direction: column;">
             <header>
-                <h1>VOCABULARY MASTER</h1>
+                <h1>VOCAB MASTER</h1>
                 <div>
-                    <span style="margin-right: 8px; color: var(--text-sub);">言語:</span>
                     <select id="lang-select">
                         <option value="英語">🇬🇧 英語</option>
                         <option value="ドイツ語">🇩🇪 ドイツ語</option>
@@ -212,8 +228,8 @@
             </header>
 
             <div class="tabs">
-                <button class="tab-btn active" data-target="tab-search">🔍 辞書・検索</button>
-                <button class="tab-btn" data-target="tab-mc">📝 4択テスト</button>
+                <button class="tab-btn active" data-target="tab-search">🔍 検索</button>
+                <button class="tab-btn" data-target="tab-mc">📝 4択</button>
                 <button class="tab-btn" data-target="tab-spell">⌨️ スペル</button>
                 <button class="tab-btn" data-target="tab-review">⚠️ 復習</button>
             </div>
@@ -223,16 +239,16 @@
                 <div class="split-layout">
                     <div class="left-panel">
                         <div style="display: flex; gap: 8px;">
-                            <select id="search-level" style="flex: 0 0 110px;"></select>
-                            <input type="text" id="search-box" placeholder="キーワード検索..." style="flex: 1;">
+                            <select id="search-level" style="flex: 0 0 95px;"></select>
+                            <input type="text" id="search-box" placeholder="単語・意味検索..." style="flex: 1;">
                         </div>
                         <div class="word-list" id="search-list"></div>
                     </div>
                     <div class="right-panel">
                         <div class="big-word" id="detail-word">選択してください</div>
                         <div class="phonetic" id="detail-phonetic">-</div>
-                        <div class="meaning" id="detail-meaning">リストから単語を選択してください</div>
-                        <button class="action-btn" id="btn-play-audio" disabled>🔊 ネイティブ高音質発音を聞く</button>
+                        <div class="meaning" id="detail-meaning">単語を選択すると詳細が表示されます</div>
+                        <button class="action-btn" id="btn-play-audio" disabled>🔊 ネイティブ発音を聞く</button>
                     </div>
                 </div>
             </div>
@@ -240,18 +256,20 @@
             <!-- 4択テスト -->
             <div id="tab-mc" class="tab-content">
                 <div id="mc-setup" class="test-setup">
-                    <h2 style="color: var(--accent); margin-bottom: 20px;">4択テスト設定</h2>
-                    <div style="margin-bottom: 20px;">
-                        レベル: <select id="mc-level"></select>
+                    <h2 style="color: var(--accent); margin-bottom: 15px;">4択テスト設定</h2>
+                    <div style="margin-bottom: 20px; font-size: 14px;">
+                        レベル: <select id="mc-level"></select><br><br>
                         問題数: <input type="number" id="mc-count" value="10" min="1" max="100" style="width: 70px;">
                     </div>
                     <button class="action-btn" id="btn-start-mc">🚀 テスト開始</button>
                 </div>
 
                 <div id="mc-play" class="test-play">
-                    <div style="color: var(--text-sub);" id="mc-progress">1 / 10</div>
-                    <div class="big-word clickable" id="mc-word" title="タップして再発音">Word</div>
-                    <div class="phonetic" id="mc-phonetic">/phonetic/</div>
+                    <div style="color: var(--text-sub); font-size: 13px;" id="mc-progress">1 / 10</div>
+                    <div>
+                        <div class="big-word clickable" id="mc-word" title="タップして再発音">Word</div>
+                        <div class="phonetic" id="mc-phonetic">/phonetic/</div>
+                    </div>
                     <div class="choice-grid" id="mc-choices"></div>
                 </div>
 
@@ -266,22 +284,20 @@
             <!-- スペルテスト -->
             <div id="tab-spell" class="tab-content">
                 <div id="spell-setup" class="test-setup">
-                    <h2 style="color: var(--accent); margin-bottom: 20px;">スペルテスト設定</h2>
-                    <div style="margin-bottom: 20px;">
-                        レベル: <select id="spell-level"></select>
+                    <h2 style="color: var(--accent); margin-bottom: 15px;">スペルテスト設定</h2>
+                    <div style="margin-bottom: 20px; font-size: 14px;">
+                        レベル: <select id="spell-level"></select><br><br>
                         問題数: <input type="number" id="spell-count" value="10" min="1" max="100" style="width: 70px;">
                     </div>
                     <button class="action-btn" id="btn-start-spell">🚀 テスト開始</button>
                 </div>
 
                 <div id="spell-play" class="test-play">
-                    <div style="color: var(--text-sub);" id="spell-progress">1 / 10</div>
-                    <div style="margin: 20px 0; color: var(--text-sub);">意味に対応するスペルを入力してください</div>
-                    <div class="meaning" id="spell-meaning" style="font-size: 2rem; color: white;">意味</div>
+                    <div style="color: var(--text-sub); font-size: 13px;" id="spell-progress">1 / 10</div>
+                    <div class="meaning" id="spell-meaning" style="font-size: 1.6rem; color: white;">意味</div>
                     <div>
-                        <input type="text" id="spell-input" placeholder="スペルを入力..." style="font-size: 1.3rem; text-align: center; width: 300px; margin-bottom: 15px;" autocomplete="off">
-                        <br>
-                        <button class="action-btn" id="btn-submit-spell">回答</button>
+                        <input type="text" id="spell-input" placeholder="スペルを入力..." style="font-size: 1.1rem; text-align: center; width: 100%; margin-bottom: 12px;" autocomplete="off">
+                        <button class="action-btn" id="btn-submit-spell" style="width: 100%;">回答</button>
                     </div>
                 </div>
 
@@ -297,12 +313,12 @@
             <div id="tab-review" class="tab-content">
                 <div class="split-layout">
                     <div class="left-panel">
-                        <h3 style="color: var(--accent); margin-bottom: 10px;">⚠️ 間違えた単語一覧</h3>
+                        <h3 style="color: var(--accent); margin-bottom: 8px; font-size: 16px;">⚠️ 間違えた単語一覧</h3>
                         <div class="word-list" id="review-list"></div>
                     </div>
-                    <div class="right-panel">
-                        <button class="action-btn" id="btn-review-mc" style="margin-bottom: 15px; width: 80%;">📝 このリストで4択テスト</button>
-                        <button class="action-btn" id="btn-clear-review" style="background: var(--danger); width: 80%;">🗑️ 復習リストをクリア</button>
+                    <div class="right-panel" style="gap: 10px;">
+                        <button class="action-btn" id="btn-review-mc" style="width: 100%;">📝 このリストで4択テスト</button>
+                        <button class="action-btn" id="btn-clear-review" style="background: var(--danger); width: 100%;">🗑️ 復習リストをクリア</button>
                     </div>
                 </div>
             </div>
@@ -310,26 +326,54 @@
     </div>
 
     <script>
-        let allWords = [];
-        let currentLangWords = [];
-        let mistakes = [];
-        let currentLang = "英語";
-        
-        // オーディオインスタンス
-        const globalAudio = new Audio();
+        // PWA Manifest 動的初期化
+        const manifestData = {
+            "name": "Vocabulary Master",
+            "short_name": "VocabMaster",
+            "start_url": "./",
+            "display": "standalone",
+            "background_color": "#0f172a",
+            "theme_color": "#0f172a",
+            "icons": [{
+                "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2300e5ff'/><text x='50%' y='65%' font-size='60' text-anchor='middle' fill='%230f172a' font-family='sans-serif' font-weight='bold'>V</text></svg>",
+                "sizes": "192x192 512x512",
+                "type": "image/svg+xml"
+            }]
+        };
+        const manifestBlob = new Blob([JSON.stringify(manifestData)], { type: 'application/json' });
+        document.getElementById('manifest-placeholder').setAttribute('href', URL.createObjectURL(manifestBlob));
 
-        // ネイティブ高音質TTS再生関数 (Google TTS Engine API)
-        function speakWord(word) {
-            if (!word) return;
-            const langCode = (currentLang === "ドイツ語") ? "de" : "en";
-            const encodedWord = encodeURIComponent(word.trim());
-            const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedWord}&tl=${langCode}&client=tw-ob`;
-
-            globalAudio.pause();
-            globalAudio.src = audioUrl;
-            globalAudio.play().catch(err => {
-                console.warn("Audio play prevented or error:", err);
+        // Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(() => {});
             });
+        }
+
+        let allWords = [], currentLangWords = [], mistakes = [], currentLang = "英語";
+
+        // --- スマホブラウザ用 音声制御（Web Speech API + 自動制限アンロック） ---
+        const synth = window.speechSynthesis;
+        let isAudioUnlocked = false;
+
+        function unlockMobileAudio() {
+            if (isAudioUnlocked || !synth) return;
+            const u = new SpeechSynthesisUtterance('');
+            u.volume = 0.01;
+            synth.speak(u);
+            isAudioUnlocked = true;
+        }
+
+        document.addEventListener('touchstart', unlockMobileAudio, { once: true });
+        document.addEventListener('click', unlockMobileAudio, { once: true });
+
+        function speakWord(word) {
+            if (!word || !synth) return;
+            synth.cancel();
+            const u = new SpeechSynthesisUtterance(word.trim());
+            u.lang = (currentLang === "ドイツ語") ? "de-DE" : "en-US";
+            u.rate = 0.85;
+            synth.speak(u);
         }
 
         // CSV読み込み
@@ -356,7 +400,7 @@
             });
         });
 
-        // タブ切り替え
+        // タブ切替
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -366,7 +410,6 @@
             });
         });
 
-        // 言語切替
         document.getElementById('lang-select').addEventListener('change', (e) => {
             currentLang = e.target.value;
             switchLanguage();
@@ -379,7 +422,7 @@
             updateReviewList();
             document.getElementById('detail-word').textContent = "選択してください";
             document.getElementById('detail-phonetic').textContent = "-";
-            document.getElementById('detail-meaning').textContent = "リストから単語を選択してください";
+            document.getElementById('detail-meaning').textContent = "単語を選択すると詳細が表示されます";
             document.getElementById('btn-play-audio').disabled = true;
         }
 
@@ -391,7 +434,7 @@
             document.getElementById('spell-level').innerHTML = html;
         }
 
-        // 辞書・検索（キーワード検索 ＆ レベル絞り込み）
+        // 検索
         document.getElementById('search-box').addEventListener('input', () => renderSearchList());
         document.getElementById('search-level').addEventListener('change', () => renderSearchList());
 
@@ -423,7 +466,6 @@
             });
         }
 
-        // 共通カットイン演出 (⭕️ / ❌)
         function triggerCutin(isCorrect, callback) {
             const overlay = document.getElementById('cutin-overlay');
             overlay.textContent = isCorrect ? "⭕️" : "❌";
@@ -433,7 +475,7 @@
             setTimeout(() => {
                 overlay.style.display = "none";
                 callback();
-            }, 600);
+            }, 550);
         }
 
         function recordMistake(wordObj) {
@@ -460,19 +502,13 @@
             updateReviewList();
         });
 
-        // テスト制御用変数
         let testQuestions = [], currentIdx = 0, score = 0, currentMistakes = [];
-
         function shuffle(arr) { return arr.sort(() => Math.random() - 0.5); }
 
-        // 4択テスト中の単語タップで再発音するイベント設定
         document.getElementById('mc-word').addEventListener('click', () => {
-            if (testQuestions[currentIdx]) {
-                speakWord(testQuestions[currentIdx].単語);
-            }
+            if (testQuestions[currentIdx]) speakWord(testQuestions[currentIdx].単語);
         });
 
-        // 4択テスト
         document.getElementById('btn-start-mc').addEventListener('click', () => startMCTest(false));
         document.getElementById('btn-review-mc').addEventListener('click', () => {
             document.querySelectorAll('.tab-btn')[1].click();
@@ -533,7 +569,6 @@
             });
         }
 
-        // スペルテスト
         document.getElementById('btn-start-spell').addEventListener('click', () => {
             const pool = document.getElementById('spell-level').value === "すべて" ? currentLangWords : currentLangWords.filter(w => w.レベル === document.getElementById('spell-level').value);
             if (pool.length === 0) return alert("単語がありません");
@@ -581,7 +616,6 @@
         document.getElementById('btn-submit-spell').addEventListener('click', checkSpell);
         document.getElementById('spell-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') checkSpell(); });
 
-        // リザルト・解説表示
         function showResults(mode) {
             document.getElementById(`${mode}-play`).style.display = 'none';
             const resPanel = document.getElementById(`${mode}-result`);
