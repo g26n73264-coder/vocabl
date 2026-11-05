@@ -4,14 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vocabulary Master - Native TTS Edition</title>
-    
-    <!-- PWA & iOS対応メタタグ -->
-    <link rel="manifest" id="manifest-placeholder">
-    <meta name="theme-color" content="#0f172a">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="VocabMaster">
-
     <!-- CSVパース用ライブラリ -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
@@ -140,6 +132,20 @@
         .list-item:hover, .list-item.selected { background: rgba(0, 229, 255, 0.1); border-left: 4px solid var(--accent); }
 
         .big-word { font-size: 3rem; font-weight: 800; margin-bottom: 10px; }
+        
+        /* 再発音可能な単語表示用のスタイル */
+        .big-word.clickable {
+            cursor: pointer;
+            user-select: none;
+            transition: transform 0.1s, color 0.2s;
+        }
+        .big-word.clickable:hover {
+            color: var(--accent);
+        }
+        .big-word.clickable:active {
+            transform: scale(0.96);
+        }
+
         .phonetic { font-size: 1.2rem; color: var(--accent); font-style: italic; margin-bottom: 20px; }
         .meaning { font-size: 1.4rem; color: var(--text-sub); margin-bottom: 30px; }
 
@@ -158,6 +164,7 @@
         }
         .choice-btn:hover { background: rgba(0,229,255,0.1); border-color: var(--accent); }
 
+        /* ⭕️/❌ カットイン演出 */
         #cutin-overlay {
             position: fixed;
             top: 50%;
@@ -170,6 +177,7 @@
             pointer-events: none;
         }
 
+        /* リザルト画面 */
         .result-panel { display: none; flex-direction: column; align-items: center; text-align: center; margin: auto; width: 100%; }
         .result-score { font-size: 3rem; font-weight: 800; color: var(--accent); margin: 15px 0; }
         .remediation-box { width: 100%; max-height: 250px; overflow-y: auto; text-align: left; margin: 15px 0; }
@@ -178,6 +186,7 @@
 </head>
 <body>
 
+    <!-- ⭕️/❌ Cut-in -->
     <div id="cutin-overlay">⭕️</div>
 
     <div class="container">
@@ -186,7 +195,7 @@
             <h1 style="font-size: 32px; margin-bottom: 10px;">VOCABULARY MASTER</h1>
             <p style="color: var(--text-sub); margin-bottom: 30px;">CSVファイルを読み込んで学習を開始します</p>
             <input type="file" id="csv-file" accept=".csv" style="display: none;">
-            <button class="action-btn" onclick="unlockAudio(); document.getElementById('csv-file').click();">📁 CSVファイルを読み込む</button>
+            <button class="action-btn" onclick="document.getElementById('csv-file').click()">📁 CSVファイルを読み込む</button>
         </div>
 
         <!-- 2. アプリメイン画面 -->
@@ -213,14 +222,17 @@
             <div id="tab-search" class="tab-content active">
                 <div class="split-layout">
                     <div class="left-panel">
-                        <input type="text" id="search-box" placeholder="検索...">
+                        <div style="display: flex; gap: 8px;">
+                            <select id="search-level" style="flex: 0 0 110px;"></select>
+                            <input type="text" id="search-box" placeholder="キーワード検索..." style="flex: 1;">
+                        </div>
                         <div class="word-list" id="search-list"></div>
                     </div>
                     <div class="right-panel">
                         <div class="big-word" id="detail-word">選択してください</div>
                         <div class="phonetic" id="detail-phonetic">-</div>
                         <div class="meaning" id="detail-meaning">リストから単語を選択してください</div>
-                        <button class="action-btn" id="btn-play-audio" disabled>🔊 ネイティブ発音を聞く</button>
+                        <button class="action-btn" id="btn-play-audio" disabled>🔊 ネイティブ高音質発音を聞く</button>
                     </div>
                 </div>
             </div>
@@ -238,7 +250,7 @@
 
                 <div id="mc-play" class="test-play">
                     <div style="color: var(--text-sub);" id="mc-progress">1 / 10</div>
-                    <div class="big-word" id="mc-word">Word</div>
+                    <div class="big-word clickable" id="mc-word" title="タップして再発音">Word</div>
                     <div class="phonetic" id="mc-phonetic">/phonetic/</div>
                     <div class="choice-grid" id="mc-choices"></div>
                 </div>
@@ -298,85 +310,26 @@
     </div>
 
     <script>
-        // PWA manifest 動的作成
-        const manifestData = {
-            "name": "Vocabulary Master",
-            "short_name": "VocabMaster",
-            "start_url": "./",
-            "display": "standalone",
-            "background_color": "#0f172a",
-            "theme_color": "#0f172a",
-            "icons": [
-                {
-                    "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2300e5ff'/><text x='50%' y='65%' font-size='60' text-anchor='middle' fill='%230f172a' font-family='sans-serif' font-weight='bold'>V</text></svg>",
-                    "sizes": "192x192 512x512",
-                    "type": "image/svg+xml"
-                }
-            ]
-        };
-        const manifestBlob = new Blob([JSON.stringify(manifestData)], { type: 'application/json' });
-        document.getElementById('manifest-placeholder').setAttribute('href', URL.createObjectURL(manifestBlob));
-
-        // Service Worker 登録
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(err => {
-                    console.log('SW registration skipped or failed:', err);
-                });
-            });
-        }
-
         let allWords = [];
         let currentLangWords = [];
         let mistakes = [];
         let currentLang = "英語";
+        
+        // オーディオインスタンス
+        const globalAudio = new Audio();
 
-        // --- Android対応：標準SpeechSynthesis制御 ---
-        const synth = window.speechSynthesis;
-        let voices = [];
-
-        function loadVoices() {
-            if (!synth) return;
-            voices = synth.getVoices();
-        }
-
-        if (synth) {
-            loadVoices();
-            if (synth.onvoiceschanged !== undefined) {
-                synth.onvoiceschanged = loadVoices;
-            }
-        }
-
-        // Android Chromeの自動再生ブロック解除関数
-        function unlockAudio() {
-            if (!synth) return;
-            const dummy = new SpeechSynthesisUtterance(' ');
-            dummy.volume = 0.01;
-            synth.speak(dummy);
-        }
-
+        // ネイティブ高音質TTS再生関数 (Google TTS Engine API)
         function speakWord(word) {
-            if (!word || !synth) return;
+            if (!word) return;
+            const langCode = (currentLang === "ドイツ語") ? "de" : "en";
+            const encodedWord = encodeURIComponent(word.trim());
+            const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedWord}&tl=${langCode}&client=tw-ob`;
 
-            // 連続再生時のバグ回避のために一度キャンセル
-            synth.cancel();
-
-            const utterance = new SpeechSynthesisUtterance(word.trim());
-            const isGerman = (currentLang === "ドイツ語");
-            utterance.lang = isGerman ? "de-DE" : "en-US";
-            utterance.rate = 0.9;
-
-            if (voices.length === 0) voices = synth.getVoices();
-            const langPrefix = isGerman ? "de" : "en";
-            const available = voices.filter(v => v.lang.toLowerCase().startsWith(langPrefix));
-
-            if (available.length > 0) {
-                // Googleの高音質ボイス（Google US English等）があれば最優先
-                const googleVoice = available.find(v => v.name.includes('Google') || v.name.includes('Natural'));
-                utterance.voice = googleVoice || available[0];
-            }
-
-            synth.speak(utterance);
+            globalAudio.pause();
+            globalAudio.src = audioUrl;
+            globalAudio.play().catch(err => {
+                console.warn("Audio play prevented or error:", err);
+            });
         }
 
         // CSV読み込み
@@ -406,7 +359,6 @@
         // タブ切り替え
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                unlockAudio();
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                 btn.classList.add('active');
@@ -423,7 +375,7 @@
         function switchLanguage() {
             currentLangWords = allWords.filter(w => w.言語 === currentLang);
             updateLevels();
-            renderSearchList('');
+            renderSearchList();
             updateReviewList();
             document.getElementById('detail-word').textContent = "選択してください";
             document.getElementById('detail-phonetic').textContent = "-";
@@ -434,21 +386,29 @@
         function updateLevels() {
             const levels = ["すべて", ...new Set(currentLangWords.map(w => w.レベル))];
             const html = levels.map(l => `<option value="${l}">${l}</option>`).join('');
+            document.getElementById('search-level').innerHTML = html;
             document.getElementById('mc-level').innerHTML = html;
             document.getElementById('spell-level').innerHTML = html;
         }
 
-        // 辞書・検索
-        document.getElementById('search-box').addEventListener('input', (e) => renderSearchList(e.target.value.toLowerCase()));
+        // 辞書・検索（キーワード検索 ＆ レベル絞り込み）
+        document.getElementById('search-box').addEventListener('input', () => renderSearchList());
+        document.getElementById('search-level').addEventListener('change', () => renderSearchList());
 
-        function renderSearchList(query) {
+        function renderSearchList() {
+            const query = document.getElementById('search-box').value.toLowerCase();
+            const selectedLevel = document.getElementById('search-level').value;
             const container = document.getElementById('search-list');
             container.innerHTML = '';
+            
             currentLangWords.forEach(w => {
-                if (w.単語.toLowerCase().includes(query) || w.意味.includes(query)) {
+                const matchesLevel = (selectedLevel === "すべて" || String(w.レベル) === String(selectedLevel));
+                const matchesQuery = w.単語.toLowerCase().includes(query) || w.意味.includes(query);
+
+                if (matchesLevel && matchesQuery) {
                     const div = document.createElement('div');
                     div.className = 'list-item';
-                    div.textContent = `${w.単語} - ${w.意味}`;
+                    div.textContent = `[Lv.${w.レベル}] ${w.単語} - ${w.意味}`;
                     div.onclick = () => {
                         document.querySelectorAll('#search-list .list-item').forEach(el => el.classList.remove('selected'));
                         div.classList.add('selected');
@@ -463,6 +423,7 @@
             });
         }
 
+        // 共通カットイン演出 (⭕️ / ❌)
         function triggerCutin(isCorrect, callback) {
             const overlay = document.getElementById('cutin-overlay');
             overlay.textContent = isCorrect ? "⭕️" : "❌";
@@ -499,16 +460,21 @@
             updateReviewList();
         });
 
+        // テスト制御用変数
         let testQuestions = [], currentIdx = 0, score = 0, currentMistakes = [];
 
         function shuffle(arr) { return arr.sort(() => Math.random() - 0.5); }
 
-        document.getElementById('btn-start-mc').addEventListener('click', () => {
-            unlockAudio();
-            startMCTest(false);
+        // 4択テスト中の単語タップで再発音するイベント設定
+        document.getElementById('mc-word').addEventListener('click', () => {
+            if (testQuestions[currentIdx]) {
+                speakWord(testQuestions[currentIdx].単語);
+            }
         });
+
+        // 4択テスト
+        document.getElementById('btn-start-mc').addEventListener('click', () => startMCTest(false));
         document.getElementById('btn-review-mc').addEventListener('click', () => {
-            unlockAudio();
             document.querySelectorAll('.tab-btn')[1].click();
             startMCTest(true);
         });
@@ -567,8 +533,8 @@
             });
         }
 
+        // スペルテスト
         document.getElementById('btn-start-spell').addEventListener('click', () => {
-            unlockAudio();
             const pool = document.getElementById('spell-level').value === "すべて" ? currentLangWords : currentLangWords.filter(w => w.レベル === document.getElementById('spell-level').value);
             if (pool.length === 0) return alert("単語がありません");
 
@@ -615,6 +581,7 @@
         document.getElementById('btn-submit-spell').addEventListener('click', checkSpell);
         document.getElementById('spell-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') checkSpell(); });
 
+        // リザルト・解説表示
         function showResults(mode) {
             document.getElementById(`${mode}-play`).style.display = 'none';
             const resPanel = document.getElementById(`${mode}-result`);
