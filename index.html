@@ -186,7 +186,7 @@
             <h1 style="font-size: 32px; margin-bottom: 10px;">VOCABULARY MASTER</h1>
             <p style="color: var(--text-sub); margin-bottom: 30px;">CSVファイルを読み込んで学習を開始します</p>
             <input type="file" id="csv-file" accept=".csv" style="display: none;">
-            <button class="action-btn" onclick="document.getElementById('csv-file').click();">📁 CSVファイルを読み込む</button>
+            <button class="action-btn" onclick="unlockAudio(); document.getElementById('csv-file').click();">📁 CSVファイルを読み込む</button>
         </div>
 
         <!-- 2. アプリメイン画面 -->
@@ -320,7 +320,9 @@
         // Service Worker 登録
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW failed:', err));
+                navigator.serviceWorker.register('./sw.js').catch(err => {
+                    console.log('SW registration skipped or failed:', err);
+                });
             });
         }
 
@@ -329,60 +331,52 @@
         let mistakes = [];
         let currentLang = "英語";
 
-        // --- Android Chrome完全対応：音声解除＆マルチエンジン再生システム ---
-        let isAudioUnlocked = false;
-        const globalAudio = new Audio();
-        globalAudio.referrerPolicy = "no-referrer";
+        // --- Android対応：標準SpeechSynthesis制御 ---
+        const synth = window.speechSynthesis;
+        let voices = [];
 
-        // 画面のどこかを一度でもタップしたらAndroidの音声制限を解除する
-        function unlockAndroidAudio() {
-            if (isAudioUnlocked) return;
-            isAudioUnlocked = true;
-            
-            // Web Speech APIのウォームアップ
-            if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
-                const dummyUtterance = new SpeechSynthesisUtterance('');
-                dummyUtterance.volume = 0;
-                window.speechSynthesis.speak(dummyUtterance);
+        function loadVoices() {
+            if (!synth) return;
+            voices = synth.getVoices();
+        }
+
+        if (synth) {
+            loadVoices();
+            if (synth.onvoiceschanged !== undefined) {
+                synth.onvoiceschanged = loadVoices;
             }
         }
-        document.addEventListener('touchstart', unlockAndroidAudio, { passive: true });
-        document.addEventListener('click', unlockAndroidAudio, { passive: true });
+
+        // Android Chromeの自動再生ブロック解除関数
+        function unlockAudio() {
+            if (!synth) return;
+            const dummy = new SpeechSynthesisUtterance(' ');
+            dummy.volume = 0.01;
+            synth.speak(dummy);
+        }
 
         function speakWord(word) {
-            if (!word) return;
-            unlockAndroidAudio();
-            const cleanWord = word.trim();
-            const isGerman = (currentLang === "ドイツ語");
-            const langCode = isGerman ? "de-DE" : "en-US";
+            if (!word || !synth) return;
 
-            // まずWeb Speech APIを試行
-            if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
-                const u = new SpeechSynthesisUtterance(cleanWord);
-                u.lang = langCode;
-                u.rate = 0.9;
-                
-                let voices = window.speechSynthesis.getVoices();
-                if (voices.length > 0) {
-                    const match = voices.find(v => v.lang.replace('_', '-').startsWith(isGerman ? 'de' : 'en'));
-                    if (match) u.voice = match;
-                }
-                
-                window.speechSynthesis.speak(u);
+            // 連続再生時のバグ回避のために一度キャンセル
+            synth.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(word.trim());
+            const isGerman = (currentLang === "ドイツ語");
+            utterance.lang = isGerman ? "de-DE" : "en-US";
+            utterance.rate = 0.9;
+
+            if (voices.length === 0) voices = synth.getVoices();
+            const langPrefix = isGerman ? "de" : "en";
+            const available = voices.filter(v => v.lang.toLowerCase().startsWith(langPrefix));
+
+            if (available.length > 0) {
+                // Googleの高音質ボイス（Google US English等）があれば最優先
+                const googleVoice = available.find(v => v.name.includes('Google') || v.name.includes('Natural'));
+                utterance.voice = googleVoice || available[0];
             }
 
-            // バックアップ: 暗号化通信ストリーム再生
-            try {
-                const audioUrl = isGerman
-                    ? `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(cleanWord)}&tl=de&client=tw-ob`
-                    : `https://dict.youdao.com/dictvoice?type=0&audio=${encodeURIComponent(cleanWord)}`;
-                
-                globalAudio.pause();
-                globalAudio.src = audioUrl;
-                globalAudio.play().catch(() => {});
-            } catch(e) {}
+            synth.speak(utterance);
         }
 
         // CSV読み込み
@@ -412,6 +406,7 @@
         // タブ切り替え
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
+                unlockAudio();
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                 btn.classList.add('active');
@@ -508,8 +503,12 @@
 
         function shuffle(arr) { return arr.sort(() => Math.random() - 0.5); }
 
-        document.getElementById('btn-start-mc').addEventListener('click', () => startMCTest(false));
+        document.getElementById('btn-start-mc').addEventListener('click', () => {
+            unlockAudio();
+            startMCTest(false);
+        });
         document.getElementById('btn-review-mc').addEventListener('click', () => {
+            unlockAudio();
             document.querySelectorAll('.tab-btn')[1].click();
             startMCTest(true);
         });
@@ -569,6 +568,7 @@
         }
 
         document.getElementById('btn-start-spell').addEventListener('click', () => {
+            unlockAudio();
             const pool = document.getElementById('spell-level').value === "すべて" ? currentLangWords : currentLangWords.filter(w => w.レベル === document.getElementById('spell-level').value);
             if (pool.length === 0) return alert("単語がありません");
 
